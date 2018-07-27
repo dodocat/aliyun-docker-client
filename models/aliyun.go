@@ -1,10 +1,15 @@
 package models
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
+
+	"github.com/spf13/viper"
 )
 
 // Project aliyun cs project
@@ -19,6 +24,13 @@ type Project struct {
 	CurrentState string                 `json:"current_state"`
 	Environment  map[string]interface{} `json:"environment"`
 	Services     []Service              `json:"services"`
+}
+
+type ProjectUpdateParam struct {
+	Description string                 `json:"description"`
+	Template    string                 `json:"template"`
+	Version     string                 `json:"version"`
+	Environment map[string]interface{} `json:"environment"`
 }
 
 // Service aliyun cs service
@@ -38,9 +50,8 @@ type Service struct {
 
 // Client aliyun client
 type AliClient struct {
-	BaseURL   *url.URL
-	UserAgent string
-
+	BaseURL    *url.URL
+	UserAgent  string
 	HttpClient *http.Client
 }
 
@@ -67,7 +78,54 @@ func (c *AliClient) ListProject() (projects []Project, err error) {
 	if resp.StatusCode == 200 {
 		err = json.NewDecoder(resp.Body).Decode(&projects)
 	} else {
-		err = errors.New("status code:" + resp.Status)
+		err = errors.New("status:" + resp.Status)
 	}
+	return
+}
+
+// GetProject Get a project by name
+func (c *AliClient) GetProject(name string) (project Project, err error) {
+	rel := &url.URL{Path: fmt.Sprint("/projects/%s", name)}
+	u := c.BaseURL.ResolveReference(rel)
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.UserAgent)
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 200 {
+		err = json.NewDecoder(resp.Body).Decode(&project)
+	} else {
+		err = errors.New("status:" + resp.Status)
+	}
+	return
+}
+
+func (c *AliClient) UpdateProject(projectName string, updateBody ProjectUpdateParam) (err error) {
+	return
+}
+
+func (c *AliClient) UpdateService(projectName string, serviceName string, newImage string) (updatedService Service, err error) {
+	project, err := c.GetProject(projectName)
+	if err != nil {
+		return
+	}
+
+	template := project.Template
+	v := viper.New()
+	v.SetConfigType("yml")
+	v.ReadConfig(bytes.NewReader([]byte(template)))
+	oldImage := v.GetString(fmt.Sprintf("services.%s.image", serviceName))
+	if len(oldImage) <= 0 {
+		err = errors.New("image path error.")
+		return
+	}
+	project.Template = strings.Replace(template, oldImage, newImage, -1)
+
 	return
 }

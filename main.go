@@ -14,7 +14,6 @@ import (
 )
 
 func main() {
-
 	pool := x509.NewCertPool()
 
 	caCertPath := "ca.pem"
@@ -47,13 +46,5 @@ func main() {
 	}
 	client := models.AliClient{BaseURL: baseURL}
 	client.HttpClient = &http.Client{Transport: tr}
-	projects, err := client.ListProject()
-	if err != nil {
-		log.Println(err)
-		return
-	}
 
-	for _, projet := range projects {
-		println(projet.Name)
-	}
 }
